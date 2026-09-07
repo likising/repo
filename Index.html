@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <base target="_top">
+  <style>
+    :root {
+      --bg: #f1f5f9;
+      --card: #ffffff;
+      --border: #d7e0ea;
+      --text: #12233a;
+      --muted: #5d7489;
+      --dim: #93a6bb;
+      --teal: #0d9488;
+      --blue: #2563eb;
+      --green: #059669;
+      --red: #dc2626;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ------------------------------- cards ------------------------------- */
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+      gap: 16px;
+      padding: 22px 22px 110px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--blue);
+      border-radius: 12px;
+      padding: 13px 16px 10px;
+      box-shadow: 0 1px 4px rgba(21, 41, 66, .07);
+    }
+    .card.hk { border-left-color: var(--teal); }
+    .card.dragging {
+      opacity: .55;
+      transform: scale(1.015);
+      box-shadow: 0 10px 26px rgba(21, 41, 66, .22);
+      z-index: 5; position: relative;
+    }
+    .card.drop-target { outline: 2px dashed var(--blue); outline-offset: 3px; }
+    .top { display: flex; align-items: baseline; gap: 8px; }
+    .grip {
+      color: var(--dim); font-size: 14px; letter-spacing: 1px; cursor: grab;
+      touch-action: none; padding: 3px 5px; margin-left: -5px; border-radius: 5px;
+      user-select: none; -webkit-user-select: none; align-self: center;
+    }
+    a.hdr { display: flex; align-items: baseline; gap: 7px; min-width: 0; text-decoration: none; }
+    a.hdr:hover { text-decoration: none; }
+    .grip:hover { background: #e9eff6; color: var(--muted); }
+    .grip:active { cursor: grabbing; }
+    .sym { font-size: 15px; font-weight: 700; color: var(--text); }
+    .name { color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; }
+    a.hdr:hover .sym, a.hdr:hover .name { color: #0e7490; }
+    .dot {
+      margin-left: auto; width: 10px; height: 10px; border-radius: 50%; flex: none;
+      background: var(--green); box-shadow: 0 0 6px rgba(5, 150, 105, .55);
+    }
+    .dot.off { background: var(--dim); box-shadow: none; }
+    .dot.err { background: var(--red); box-shadow: 0 0 6px rgba(220, 38, 38, .55); }
+    .price-row { display: flex; align-items: baseline; margin-top: 9px; }
+    .price { font-size: 27px; font-weight: 750; letter-spacing: .3px; }
+    .ccy { font-size: 12.5px; color: var(--dim); margin-right: 5px; font-weight: 600; }
+    .delta-wrap { margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+    .dt { font-size: 10.5px; color: var(--dim); font-weight: 400; }
+    .delta { font-size: 13.5px; font-weight: 650; }
+    .up { color: var(--green); }
+    .down { color: var(--red); }
+    .flat { color: var(--muted); }
+    .meta { display: flex; justify-content: space-between; gap: 10px; margin-top: 7px; font-size: 11.5px; color: var(--dim); }
+    .meta b { color: var(--muted); font-weight: 600; }
+    .card hr { border: none; border-top: 1px solid var(--border); margin: 9px 0 7px; }
+    .foot { display: flex; align-items: center; justify-content: space-between; }
+    .win { font-size: 12px; color: var(--muted); }
+    .alerttxt { font-size: 12px; font-weight: 600; }
+    .badtxt { font-size: 12px; color: var(--red); font-weight: 600; }
+    .icons { display: flex; gap: 1px; flex: none; }
+    .icon { background: none; border: none; cursor: pointer; font-size: 14px; padding: 3px 6px; color: var(--muted); border-radius: 6px; }
+    .icon:hover { background: #e9eff6; color: var(--text); }
+    .icon.del { color: var(--red); }
+    .empty { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 90px 20px; font-size: 14px; }
+
+    /* --------------------------- floating buttons --------------------------- */
+    .fabs { position: fixed; right: 22px; bottom: 22px; display: flex; gap: 12px; z-index: 40; }
+    .fab {
+      width: 52px; height: 52px; border-radius: 50%; border: 1px solid #d1dce7; cursor: pointer;
+      background: #ffffff; color: #3b5872; font-size: 20px;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 12px rgba(21, 41, 66, .15);
+    }
+    .fab:hover { background: #f2f7fc; }
+    .fab.add { background: linear-gradient(135deg, #10b981, #0d9488); border-color: #10b981; color: #ffffff; font-size: 26px; font-weight: 600; }
+    .fab.add:hover { filter: brightness(1.08); }
+
+    /* -------------------------------- modals -------------------------------- */
+    .overlay {
+      position: fixed; inset: 0; background: rgba(21, 36, 54, .45);
+      display: none; align-items: center; justify-content: center; z-index: 60; padding: 16px;
+    }
+    .overlay.open { display: flex; }
+    .dialog {
+      width: min(460px, 94vw); background: #ffffff; border: 1px solid #dde5ee;
+      border-radius: 14px; padding: 20px; max-height: 88vh; overflow-y: auto;
+      box-shadow: 0 12px 40px rgba(21, 41, 66, .25);
+    }
+    .dialog.wide { width: min(600px, 94vw); }
+    .dialog h2 { font-size: 16px; font-weight: 650; margin-bottom: 14px; }
+    label { display: block; font-size: 12.5px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+    input {
+      width: 100%; padding: 9px 11px; font-size: 14px; border: 1px solid #d1dce7;
+      border-radius: 8px; background: #fbfdff; color: var(--text); outline: none;
+    }
+    input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(37, 99, 235, .13); }
+    input:disabled { opacity: .55; }
+    .field { margin-bottom: 12px; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .hint { font-size: 11.5px; color: var(--dim); margin-top: 4px; }
+    .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+    .btn {
+      font-size: 13.5px; font-weight: 600; padding: 9px 16px; border-radius: 8px;
+      border: 1px solid #d1dce7; background: #ffffff; color: var(--text); cursor: pointer;
+    }
+    .btn:hover { background: #f2f7fc; }
+    .btn.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+    .btn.primary:hover { background: #1d4ed8; }
+    .btn.danger { background: var(--red); border-color: var(--red); color: #fff; }
+    .btn.danger:hover { background: #b91c1c; }
+    .log { list-style: none; font-size: 12.5px; max-height: 320px; overflow-y: auto; margin-top: 14px; border-top: 1px solid var(--border); }
+    .log li { padding: 7px 2px; border-bottom: 1px solid var(--border); display: flex; gap: 10px; }
+    .log .t { color: var(--dim); white-space: nowrap; }
+    .log .alert, .log .error { color: var(--red); }
+    .log .alert { font-weight: 600; }
+    .log .info, .log .check { color: var(--muted); }
+    .confirm-text { font-size: 14.5px; color: var(--text); }
+
+    #toast {
+      position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+      background: #12233a; color: #ffffff; font-size: 13px; padding: 10px 16px;
+      border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none;
+      max-width: 90%; z-index: 80; box-shadow: 0 6px 20px rgba(21, 41, 66, .3);
+    }
+    #toast.show { opacity: 1; }
+    #toast.err { background: var(--red); }
+  </style>
+</head>
+<body>
+  <div id="grid"><div class="empty">Loading…</div></div>
+
+  <div class="fabs">
+    <button class="fab" title="Refresh &amp; check now" onclick="onCheckAll()">↻</button>
+    <button class="fab" title="Settings &amp; activity" onclick="openSettings()">…</button>
+    <button class="fab add" title="Add symbol" onclick="openAdd()">+</button>
+  </div>
+
+  <!-- Add / edit symbol dialog -->
+  <div id="addOverlay" class="overlay" onclick="if (event.target === this) closeOverlays()">
+    <div class="dialog">
+      <h2 id="addTitle">Add stock to monitor</h2>
+      <div class="field">
+        <label>Symbol</label>
+        <input id="fSymbol" placeholder="e.g. AAPL or 0005 / 5">
+        <div class="hint">HK numeric codes are auto-padded and get .HK appended (5 → 0005.HK). US: AAPL · Indices: ^HSI, ^IXIC</div>
+      </div>
+      <div class="field">
+        <label>Alert email</label>
+        <input id="fEmail" type="email" placeholder="you@example.com">
+        <div class="hint">Defaults to your Google account email if left blank.</div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Check interval (min)</label><input id="fInterval" type="number" min="1" step="1" value="1"></div>
+        <div class="field"><label>Window (min)</label><input id="fWindow" type="number" min="1" step="1" value="30"></div>
+        <div class="field"><label>Up threshold (%)</label><input id="fUp" type="number" min="0.01" step="0.1" value="1"></div>
+        <div class="field"><label>Down threshold (%)</label><input id="fDown" type="number" min="0.01" step="0.1" value="1"></div>
+        <div class="field"><label>Max consecutive alerts</label><input id="fMaxAlerts" type="number" min="1" step="1" value="3"></div>
+      </div>
+      <div class="row">
+        <button class="btn" onclick="closeOverlays()">Cancel</button>
+        <button class="btn primary" id="addSubmit" onclick="onSaveItem()">Add</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings / activity dialog -->
+  <div id="setOverlay" class="overlay" onclick="if (event.target === this) closeOverlays()">
+    <div class="dialog wide">
+      <h2>Settings &amp; activity</h2>
+      <div style="display:flex;gap:8px;align-items:flex-end">
+        <div style="flex:1">
+          <label>Test email recipient</label>
+          <input id="tEmail" type="email" placeholder="you@example.com">
+        </div>
+        <button class="btn" onclick="onTestEmail()">Send test email</button>
+      </div>
+      <ul id="log" class="log"><li><span class="info">Nothing yet.</span></li></ul>
+      <div class="row"><button class="btn" onclick="closeOverlays()">Close</button></div>
+    </div>
+  </div>
+
+  <!-- Remove confirmation dialog -->
+  <div id="delOverlay" class="overlay">
+    <div class="dialog" style="width:min(380px,94vw)">
+      <h2>Remove symbol</h2>
+      <p class="confirm-text" id="delText"></p>
+      <div class="row">
+        <button class="btn" onclick="closeOverlays()">Cancel</button>
+        <button class="btn danger" id="delConfirm" onclick="onRemoveConfirmed()">Remove</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <script>
+    var STATUS = null;
+    var pendingDelete = null;
+    var busy = 0;
+
+    /* ------------------------------- helpers ------------------------------- */
+    function g(id) { return document.getElementById(id).value; }
+    function setBusy(b) { busy = Math.max(0, busy + (b ? 1 : -1)); }
+    function toast(msg, isErr) {
+      var el = document.getElementById('toast');
+      el.textContent = msg;
+      el.className = 'show' + (isErr ? ' err' : '');
+      setTimeout(function () { el.className = ''; }, 3500);
+    }
+    function fail(err) { setBusy(false); toast(err && err.message ? err.message : String(err), true); }
+    // Handlers must be attached BEFORE the server function is invoked —
+    // google.script.run fires the request with the handlers configured at call time.
+    function call(fn, args, onOk) {
+      setBusy(true);
+      var runner = google.script.run
+        .withFailureHandler(fail)
+        .withSuccessHandler(function (res) { setBusy(false); onOk(res); });
+      runner[fn].apply(runner, args);
+    }
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+    function pad(n) { return String(n).padStart(2, '0'); }
+    function fmtDT(iso) {
+      if (!iso) return '—';
+      var d = new Date(iso);
+      return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear() +
+        ', ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    }
+    function fmtPrice(p) {
+      if (p == null) return '—';
+      return Number(p).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    function deltaHtml(d) {
+      if (d == null) return '<span class="delta flat">—</span>';
+      var cls = d > 0.0001 ? 'up' : (d < -0.0001 ? 'down' : 'flat');
+      var arrow = d > 0.0001 ? '↑' : (d < -0.0001 ? '↓' : '—');
+      var sign = d > 0.0001 ? '+' : '';
+      return '<span class="delta ' + cls + '">' + arrow + ' ' + sign + d.toFixed(2) + '%</span>';
+    }
+    // Short "02/09 15:43" style stamp for the delta.
+    function fmtShort(iso) {
+      if (!iso) return '';
+      var d = new Date(iso);
+      return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    }
+
+    /* ------------------------------- actions ------------------------------- */
+    function refresh() {
+      google.script.run
+        .withFailureHandler(function () {})
+        .withSuccessHandler(function (s) { STATUS = s; render(s); })
+        .getStatus();
+    }
+    function onCheckAll() {
+      call('checkAllNow', [], function (r) {
+        STATUS = r.status; render(r.status); toast(r.toastText);
+      });
+    }
+    function onCheckOne(sym) {
+      call('checkSymbolNow', [sym], function (r) {
+        STATUS = r.status; render(r.status); toast(r.toastText);
+      });
+    }
+    function onRemove(sym) {
+      pendingDelete = sym;
+      document.getElementById('delText').innerHTML =
+        'Remove <b>' + esc(sym) + '</b> from monitoring?';
+      document.getElementById('delOverlay').classList.add('open');
+    }
+    function onRemoveConfirmed() {
+      if (!pendingDelete) return;
+      var sym = pendingDelete;
+      call('removeItem', [sym], function (s) {
+        STATUS = s; closeOverlays(); render(s);
+        toast(sym + ' removed');
+        pendingDelete = null;
+      });
+    }
+    function onSaveItem() {
+      var it = {
+        symbol: g('fSymbol'), email: g('fEmail'),
+        intervalMin: g('fInterval'), windowMin: g('fWindow'),
+        upPct: g('fUp'), downPct: g('fDown'),
+        maxAlerts: g('fMaxAlerts')
+      };
+      call('upsertItem', [it], function (r) {
+        STATUS = r.status; closeOverlays(); render(r.status); toast(r.toastText);
+      });
+    }
+    function onTestEmail() {
+      call('sendTestEmail', [g('tEmail')], function (msg) {
+        toast(msg); refresh();
+      });
+    }
+
+    /* -------------------------------- modals -------------------------------- */
+    function defaultEmail() {
+      if (STATUS && STATUS.items) {
+        for (var i = 0; i < STATUS.items.length; i++) {
+          if (STATUS.items[i].email) return STATUS.items[i].email;
+        }
+      }
+      return '';
+    }
+    function openAdd(sym) {
+      var item = null;
+      if (sym && STATUS) {
+        STATUS.items.forEach(function (x) { if (x.symbol === sym) item = x; });
+      }
+      document.getElementById('fSymbol').value = item ? item.symbol : '';
+      document.getElementById('fSymbol').disabled = !!item;
+      document.getElementById('fEmail').value = item ? item.email : defaultEmail();
+      document.getElementById('fInterval').value = item ? item.intervalMin : 1;
+      document.getElementById('fWindow').value = item ? item.windowMin : 30;
+      document.getElementById('fUp').value = item ? item.upPct : 1;
+      document.getElementById('fDown').value = item ? item.downPct : 1;
+      document.getElementById('fMaxAlerts').value = item ? (item.maxAlerts || 3) : 3;
+      document.getElementById('addTitle').textContent = item ? 'Edit ' + item.symbol : 'Add stock to monitor';
+      document.getElementById('addSubmit').textContent = item ? 'Save' : 'Add';
+      document.getElementById('addOverlay').classList.add('open');
+    }
+    function openSettings() {
+      document.getElementById('tEmail').value = defaultEmail();
+      renderLog(STATUS ? STATUS.log || [] : []);
+      document.getElementById('setOverlay').classList.add('open');
+    }
+    function closeOverlays() {
+      document.querySelectorAll('.overlay').forEach(function (o) { o.classList.remove('open'); });
+    }
+
+    /* ------------------------------- rendering ------------------------------ */
+    function render(status) {
+      var grid = document.getElementById('grid');
+      var items = status.items || [];
+      if (!items.length) {
+        grid.innerHTML = '<div class="empty">No symbols yet — press <b>+</b> to add your first stock.</div>';
+      } else {
+        var latest = status.latest || {};
+        grid.innerHTML = items.map(function (item) {
+          return cardHtml(item, latest[item.symbol], status.triggerActive);
+        }).join('');
+        enableDrag();
+      }
+      if (document.getElementById('setOverlay').classList.contains('open')) {
+        renderLog(status.log || []);
+      }
+    }
+
+    function cardHtml(item, q, active) {
+      var url = item.urlSymbol ? 'https://www.google.com/finance/beta/quote/' + encodeURIComponent(item.urlSymbol) : '#';
+      var bad = q && q.error;
+      var hk = (q && q.currency) ? q.currency === 'HKD' : /\.HK$/i.test(item.symbol);
+      var meta = bad
+        ? '<span class="badtxt">Error: ' + esc(q.error) + '</span><span></span>'
+        : (q
+          ? '<span>Trade <b>' + fmtDT(q.tradeAt) + '</b></span><span>Checked <b>' + fmtDT(q.at) + '</b></span>'
+          : '<span>Waiting for first quote…</span><span></span>');
+      var activeAlert = q && !bad && (q.alertCount || 0) >= 1;
+      var maxAl = item.maxAlerts || 3;
+      var cnt = q && !bad ? (q.alertCount || 0) : 0;
+      var chips = bad
+        ? '<span class="badtxt">' + item.intervalMin + 'min · +' + item.upPct + '%/-' + item.downPct + '%</span>'
+        : (activeAlert
+          ? '<span class="alerttxt ' + (q.lastAlert.direction === 'UP' ? 'up' : 'down') + '">Alert: ' + q.lastAlert.direction.toLowerCase() +
+            (cnt <= maxAl
+                ? ' · ' + cnt + '/' + maxAl
+                : ' · suppressed') + '</span>' +
+            '<span class="win">' + item.intervalMin + 'min · +' + item.upPct + '%/-' + item.downPct + '%</span>'
+          : '<span class="win">Window ' + item.windowMin + 'min · Every ' + item.intervalMin + 'min · +' + item.upPct + '%/-' + item.downPct + '%</span>');
+      var s = esc(item.symbol);
+      return '<div class="card' + (hk ? ' hk' : '') + '" data-sym="' + s + '">' +
+        '<div class="top"><span class="grip" title="Drag to reorder">⠿</span>' +
+        '<a class="hdr" href="' + url + '" target="_blank">' +
+        '<span class="sym">' + s + '</span>' +
+        '<span class="name">' + esc(q && q.name ? q.name : '') + '</span></a>' +
+        '<span class="dot' + (bad ? ' err' : (active ? '' : ' off')) + '"></span></div>' +
+        '<div class="price-row">' + (q && q.currency && !bad ? '<span class="ccy">' + esc(q.currency) + '</span>' : '') +
+        '<span class="price">' + (bad ? '—' : (q ? fmtPrice(q.price) : '—')) + '</span>' +
+        '<span class="delta-wrap">' +
+        (bad ? '<span class="delta flat">—</span>' : (q ? deltaHtml(q.deltaPct) : '<span class="delta flat">—</span>')) +
+        (q && q.refAt && !bad ? '<span class="dt">' + fmtShort(q.refAt) + '</span>' : '') +
+        '</span></div>' +
+        '<div class="meta">' + meta + '</div><hr>' +
+        '<div class="foot"><span style="display:flex;gap:10px;flex-wrap:wrap">' + chips + '</span>' +
+        '<span class="icons">' +
+        '<button class="icon" title="Check now" onclick="onCheckOne(\'' + s + '\')">↻</button>' +
+        '<button class="icon" title="Edit settings" onclick="openAdd(\'' + s + '\')">✎</button>' +
+        '<button class="icon del" title="Remove" onclick="onRemove(\'' + s + '\')">×</button>' +
+        '</span></div></div>';
+    }
+
+    function renderLog(log) {
+      var el = document.getElementById('log');
+      if (!log.length) { el.innerHTML = '<li><span class="info">Nothing yet.</span></li>'; return; }
+      el.innerHTML = log.map(function (e) {
+        return '<li><span class="t">' + fmtDT(e.at) + '</span>' +
+          '<span class="' + esc(e.type) + '">' + esc(e.message) + '</span></li>';
+      }).join('');
+    }
+
+    /* -------------------- drag to reorder (mouse + touch) -------------------- */
+    var drag = null;
+
+    function enableDrag() {
+      document.querySelectorAll('#grid .card .grip').forEach(function (grip) {
+        grip.addEventListener('pointerdown', function (e) {
+          e.preventDefault();
+          var card = grip.closest('.card');
+          drag = { card: card, over: null, before: false, moved: false };
+          card.classList.add('dragging');
+          document.body.style.userSelect = 'none';
+          try { grip.setPointerCapture(e.pointerId); } catch (err) {}
+        });
+      });
+    }
+
+    document.addEventListener('pointermove', function (e) {
+      if (!drag) return;
+      var el = document.elementFromPoint(e.clientX, e.clientY);
+      var target = el && el.closest ? el.closest('.card') : null;
+      if (target === drag.card) target = null;
+      if (drag.over && drag.over !== target) drag.over.classList.remove('drop-target');
+      drag.over = target;
+      if (target) {
+        var r = target.getBoundingClientRect();
+        drag.before = e.clientY < r.top + r.height / 2;
+        target.classList.add('drop-target');
+        drag.moved = true;
+      }
+    });
+
+    function endDrag() {
+      if (!drag) return;
+      drag.card.classList.remove('dragging');
+      if (drag.over) {
+        drag.over.classList.remove('drop-target');
+        if (drag.before) drag.over.before(drag.card);
+        else drag.over.after(drag.card);
+      }
+      document.body.style.userSelect = '';
+      if (drag.moved) persistOrder();
+      drag = null;
+    }
+    document.addEventListener('pointerup', endDrag);
+    document.addEventListener('pointercancel', endDrag);
+
+    function persistOrder() {
+      var order = Array.from(document.querySelectorAll('#grid .card')).map(function (c) {
+        return c.getAttribute('data-sym');
+      });
+      google.script.run
+        .withFailureHandler(function () {})
+        .withSuccessHandler(function (s) { STATUS = s; })
+        .saveOrder(order);
+    }
+
+    refresh();
+    setInterval(refresh, 15000);
+  </script>
+</body>
+</html>
