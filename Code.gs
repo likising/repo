@@ -321,7 +321,7 @@ state.latest[sym] = {
 };
 if (direction) {
   if (cnt <= item.maxAlerts) {
-    sendAlert_(item, quote, deltaThisCheck, direction, now);
+    sendAlert_(item, quote, deltaThisCheck, direction, now, cnt, direction === 'UP' ? windowMinP : windowMaxP, peak ? peak.t : now);
     addLog_('alert', sym + ' ' + direction + ' ' + formatPct_(deltaThisCheck) +
       ' (' + price + ' ' + quote.currency + ') — alert emailed to ' + item.email);
   } else {
@@ -390,29 +390,39 @@ function fetchQuote_(symbol) {
 
 /* --------------------------------- Alerts ---------------------------------- */
 
-function sendAlert_(item, quote, deltaPct, direction, now) {
+function sendAlert_(item, quote, deltaPct, direction, now, cnt, refPrice, refTime) {
   var arrow = direction === 'UP' ? '📈' : '📉';
-  var threshold = direction === 'UP' ? '+' + item.upPct + '%' : '-' + item.downPct + '%';
-  var reference = direction === 'UP' ? 'window low' : 'window high';
-  var subject = arrow + ' ' + quote.symbol + ' ' + direction + ' ' + formatPct_(deltaPct) +
-    ' (threshold ' + threshold + ')';
-  var body = [
-    'Stock price alert',
-    '',
-    'Symbol:     ' + quote.symbol + ' (' + quote.name + ')',
-    'Exchange:   ' + quote.exchange,
-    'Direction:  ' + direction,
-    'Change:     ' + formatPct_(deltaPct) + ' vs ' + reference + ' in the last ' + item.windowMin + ' min',
-    'Price now:  ' + quote.price + ' ' + quote.currency,
-    'Threshold:  ' + threshold,
-    'Time:       ' + new Date(now).toString(),
-    '',
-    'The window has been re-seeded from the current price; the next alert',
-    'will be measured against new extremes from ' + quote.price + ' ' + quote.currency + ' onward.'
-  ].join('\n');
-  MailApp.sendEmail(item.email, subject, body);
+  var color = direction === 'UP' ? '#16a34a' : '#dc2626';
+  var pct = formatPct_(deltaPct);
+  var refP = (refPrice != null && refPrice >  0) ? formatPrice_(refPrice) + ' ' + quote.currency : '—';
+  var refT = refTime ? formatHKT_(refTime) : '—';
+  var subject = arrow + ' ' + quote.symbol + ' ' + direction + ' ' + pct +
+    ' @ ' + formatPrice_(quote.price) + ' ' + quote.currency + ' (' + cnt + '/' + item.maxAlerts + ')';
+  var rows = [
+    ['Symbol', escHtml_(quote.symbol + ' (' + quote.name + ')')],
+    ['Window delta', '<b style="color:' + color + ';">' + pct + '</b> (' + item.windowMin + ' min window)'],
+    ['Current price', escHtml_(formatPrice_(quote.price) + ' ' + quote.currency + ' @ ' + formatHKT_(quote.tradeAt))],
+    ['Reference price', escHtml_(refP + ' @ ' + refT)],
+    ['Market state', escHtml_(quote.marketState || '—')],
+    ['Check interval', item.intervalMin + ' min'],
+    ['Thresholds', 'Up +' + Number(item.upPct).toFixed(2) + '% / Down −' + Number(item.downPct).toFixed(2) + '%'],
+    ['Consecutive alert', cnt + ' / ' + item.maxAlerts + ' max'],
+    ['Checked at', formatHKT_(now)]
+  ];
+  var heading = '<p style="margin:0 0 14px;font-size:15px;font-weight:bold;color:#0e7490;">' +
+    arrow + ' ' + escHtml_(quote.symbol + ' (' + quote.name + ')') + ' - Alert summary</p>';
+  var html = heading +
+    '<table style="border-collapse:collapse;width:100%;font-size:13px;color:#111827;font-family:Arial,Helvetica,sans-serif;">';
+  rows.forEach(function (r) {
+    html += '<tr><td style="padding:6px 10px;background:#f8fafc;border:1px solid #e2e8f0;font-weight:bold;width:32%;">' +
+      r[0] + '</td><td style="padding:6px 10px;border:1px solid #e2e8f0;">' + r[1] + '</td></tr>';
+  });
+  html += '</table>';
+  html += '<p style="margin:12px 0 0;font-size:12px;color:#6b7280;font-family:Arial,Helvetica,sans-serif;">' +
+    'No further identical alert will be sent for this move (max ' + item.maxAlerts +
+    ' consecutive per direction). The streak resets when the delta value changes or the direction flips.</p>';
+  MailApp.sendEmail(item.email, subject, html, { htmlBody: html });
 }
-
 /* ------------------------------- State / log ------------------------------- */
 
 function getState_() {
@@ -452,6 +462,27 @@ function getLog_() {
 function formatPct_(v) {
   return (v >= 0 ? '+' : '') + (Math.round(v * 100) / 100).toFixed(2) + '%';
 }
+
+function escHtml_(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function formatPrice_(v) {
+  if (v == null) return '—';
+  return Number(v).toFixed(2);
+}
+
+function formatHKT_(isoOrMs) {
+  if (isoOrMs == null) return '—';
+  var d = isoOrMs instanceof Date ? isoOrMs : new Date(isoOrMs);
+  if (isNaN(d.getTime())) return '—';
+  var hk = new Date(d.getTime() + 8 * 3600 * 1000); // shift to HKT (UTC+8)
+  return pad2_(hk.getUTCDate()) + '/' + pad2_(hk.getUTCMonth() + 1) + '/' + hk.getUTCFullYear() +
+    ' ' + pad2_(hk.getUTCHours()) + ':' + pad2_(hk.getUTCMinutes()) + ' HKT';
+}
+function pad2_(n) { return (n < 10 ? '0' : '') + n; }
 
 function round4_(v) {
   return Math.round(v * 10000) / 10000;

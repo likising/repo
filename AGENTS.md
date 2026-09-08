@@ -28,6 +28,10 @@ Web app built with Google Apps Script. Files: `Code.gs` (server), `Index.html` (
 - Zero-width space (`U+200B`) corruption has repeatedly occurred via my tool text transmission — when `str_replace`/inline-python "not found" issues arise, prefer line-index-based python edits or `sed`; always `node --check` (copy `.gs`→`.js` first) to verify.
 - Terminal inline heredocs are prone to `,,`/`==`/`::` corruption — verify with `cat -A`/`od -c` when syntax fails mysteriously; a clean-file approach (`file_editor`→strip ZWSP→run) is more reliable.
 
+## User preferences
+
+- **Output style**: Do NOT show reasoning/thinking process in responses — only conclusions and results. This applies to all conversations and topics.
+
 ## Latest state (as of 2026-09-07)
 
 All requested features implemented and verified: light theme, HK normalization, Google Finance links (incl indices), drag-reorder persisted, currency-aware card colors, delta timestamp, min/max windowed delta, peak display, no re-seed, suppression (maxAlerts + delta-value-reset rule), chip gated on current `alertCount` (stale-tag "0/3" case fixed→shows "Window…"), card under title "…(resolved)" branch removed. Both `Code.gs` and `Index.html` pass `node --check`. No git commits yet.
