@@ -31,6 +31,8 @@ Web app built with Google Apps Script. Files: `Code.gs` (server), `Index.html` (
 ## User preferences
 
 - **Output style**: Do NOT show reasoning/thinking process in responses — only conclusions and results. This applies to all conversations and topics.
+  - Never narrate your own actions or debugging play-by-play (e.g. "let me check", "I tried X", "temp file corrupted", "attempted again") — just state the final conclusion/finding directly.
+  - Tool calls still happen silently; only the outcome is presented.
 
 ## Latest state (as of 2026-09-07)
 

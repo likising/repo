@@ -309,6 +309,7 @@ state.latest[sym] = {
   name: quote.name,
   exchange: quote.exchange,
   marketState: quote.marketState,
+  sessionKind: quote.sessionKind || 'REGULAR',
   tradeAt: quote.tradeAt,
   windowMin: windowMinP,
   windowMax: windowMaxP,
@@ -361,14 +362,23 @@ function fetchQuote_(symbol) {
         continue;
       }
       var meta = result.meta || {};
+      var closes = result.indicators && result.indicators.quote &&
+        result.indicators.quote[0] && result.indicators.quote[0].close;
+      var lastCandle = null;
+      if (closes) {
+        for (var j = closes.length - 1; j >= 0; j--) {
+          if (closes[j] != null) { lastCandle = closes[j]; break; }
+        }
+      }
+      var marketState = meta.marketState;
       var price = meta.regularMarketPrice;
-      if (price == null) {
-        var closes = result.indicators && result.indicators.quote &&
-          result.indicators.quote[0] && result.indicators.quote[0].close;
-        if (closes) {
-          for (var j = closes.length - 1; j >= 0; j--) {
-            if (closes[j] != null) { price = closes[j]; break; }
-          }
+      var tradeAt = meta.regularMarketTime ? new Date(meta.regularMarketTime * 1000) : null;
+      if (marketState === 'PRE' || marketState === 'POST') {
+        if (meta.fulldayPrice != null) {
+          price = meta.fulldayPrice;
+          tradeAt = null;
+        } else if (lastCandle != null) {
+          price = lastCandle;
         }
       }
       if (price == null) throw new Error('No price in response');
@@ -377,9 +387,10 @@ function fetchQuote_(symbol) {
         name: meta.shortName || meta.longName || meta.symbol || symbol,
         price: price,
         currency: meta.currency || '',
-        marketState: meta.marketState || '',
+        marketState: marketState,
         exchange: meta.fullExchangeName || meta.exchangeName || '',
-        tradeAt: meta.regularMarketTime ? new Date(meta.regularMarketTime * 1000).toISOString() : null
+        tradeAt: tradeAt ? tradeAt.toISOString() : null,
+        sessionKind: (marketState === 'PRE' || marketState === 'POST') ? marketState : 'REGULAR',
       };
     } catch (e) {
       lastErr = e;
@@ -403,7 +414,7 @@ function sendAlert_(item, quote, deltaPct, direction, now, cnt, refPrice, refTim
     ['Window delta', '<b style="color:' + color + ';">' + pct + '</b> (' + item.windowMin + ' min window)'],
     ['Current price', escHtml_(formatPrice_(quote.price) + ' ' + quote.currency + ' @ ' + formatHKT_(quote.tradeAt))],
     ['Reference price', escHtml_(refP + ' @ ' + refT)],
-    ['Market state', escHtml_(quote.marketState || '—')],
+    ['Market state', escHtml_(quote.marketState || (quote.sessionKind === 'PRE' ? 'Pre-market' : quote.sessionKind === 'POST' ? 'Post-market' : '—'))],
     ['Check interval', item.intervalMin + ' min'],
     ['Thresholds', 'Up +' + Number(item.upPct).toFixed(2) + '% / Down −' + Number(item.downPct).toFixed(2) + '%'],
     ['Consecutive alert', cnt + ' / ' + item.maxAlerts + ' max'],
@@ -487,3 +498,4 @@ function pad2_(n) { return (n < 10 ? '0' : '') + n; }
 function round4_(v) {
   return Math.round(v * 10000) / 10000;
 }
+

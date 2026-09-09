@@ -381,14 +381,18 @@
       var meta = bad
         ? '<span class="badtxt">Error: ' + esc(q.error) + '</span><span></span>'
         : (q
-          ? '<span>Trade <b>' + fmtDT(q.tradeAt) + '</b></span><span>Checked <b>' + fmtDT(q.at) + '</b></span>'
+          ? '<span>' + (q.sessionKind === 'PRE' ? 'Pre' : q.sessionKind === 'POST' ? 'Post' : 'Trade') +
+            ' <b>' + fmtDT(q.tradeAt) + '</b></span><span>Checked <b>' + fmtDT(q.at) + '</b></span>'
           : '<span>Waiting for first quote…</span><span></span>');
       var activeAlert = q && !bad && (q.alertCount || 0) >= 1;
       var maxAl = item.maxAlerts || 3;
       var cnt = q && !bad ? (q.alertCount || 0) : 0;
       var chips = bad
         ? '<span class="badtxt">' + item.intervalMin + 'min · +' + item.upPct + '%/-' + item.downPct + '%</span>'
-        : (activeAlert
+        : ((q && !bad && (q.sessionKind === 'PRE' || q.sessionKind === 'POST'))
+          ? '<span class="win">' + (q.sessionKind === 'PRE' ? 'Pre-market' : 'Post-market') + '</span>'
+          : '') +
+          (activeAlert
           ? '<span class="alerttxt ' + (q.lastAlert.direction === 'UP' ? 'up' : 'down') + '">Alert: ' + q.lastAlert.direction.toLowerCase() +
             (cnt <= maxAl
                 ? ' · ' + cnt + '/' + maxAl
