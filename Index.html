@@ -180,6 +180,7 @@
         <div class="field"><label>Up threshold (%)</label><input id="fUp" type="number" min="0.01" step="0.1" value="1"></div>
         <div class="field"><label>Down threshold (%)</label><input id="fDown" type="number" min="0.01" step="0.1" value="1"></div>
         <div class="field"><label>Max consecutive alerts</label><input id="fMaxAlerts" type="number" min="1" step="1" value="3"></div>
+        <div class="field"><label>Re-alert step (%)</label><input id="fStep" type="number" min="0" step="0.1" value="0.5"></div>
       </div>
       <div class="row">
         <button class="btn" onclick="closeOverlays()">Cancel</button>
@@ -309,7 +310,7 @@
         symbol: g('fSymbol'), email: g('fEmail'),
         intervalMin: g('fInterval'), windowMin: g('fWindow'),
         upPct: g('fUp'), downPct: g('fDown'),
-        maxAlerts: g('fMaxAlerts')
+        maxAlerts: g('fMaxAlerts'), stepPct: g('fStep')
       };
       call('upsertItem', [it], function (r) {
         STATUS = r.status; closeOverlays(); render(r.status); toast(r.toastText);
@@ -343,6 +344,7 @@
       document.getElementById('fUp').value = item ? item.upPct : 1;
       document.getElementById('fDown').value = item ? item.downPct : 1;
       document.getElementById('fMaxAlerts').value = item ? (item.maxAlerts || 3) : 3;
+      document.getElementById('fStep').value = item ? (item.stepPct != null ? item.stepPct : 0.5) : 0.5;
       document.getElementById('addTitle').textContent = item ? 'Edit ' + item.symbol : 'Add stock to monitor';
       document.getElementById('addSubmit').textContent = item ? 'Save' : 'Add';
       document.getElementById('addOverlay').classList.add('open');
@@ -397,8 +399,8 @@
             (cnt <= maxAl
                 ? ' · ' + cnt + '/' + maxAl
                 : ' · suppressed') + '</span>' +
-            '<span class="win">' + item.intervalMin + 'min · +' + item.upPct + '%/-' + item.downPct + '%</span>'
-          : '<span class="win">Window ' + item.windowMin + 'min · Every ' + item.intervalMin + 'min · +' + item.upPct + '%/-' + item.downPct + '%</span>');
+            '<span class="win">' + item.intervalMin + 'min · +' + item.upPct + '%/-' + item.downPct + '% · step +' + item.stepPct + '%</span>'
+          : '<span class="win">Window ' + item.windowMin + 'min · Every ' + item.intervalMin + 'min · +' + item.upPct + '%/-' + item.downPct + '% · step +' + item.stepPct + '%</span>');
       var s = esc(item.symbol);
       return '<div class="card' + (hk ? ' hk' : '') + '" data-sym="' + s + '">' +
         '<div class="top"><span class="grip" title="Drag to reorder">⠿</span>' +

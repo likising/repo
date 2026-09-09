@@ -13,6 +13,7 @@ var LOG_KEY = 'SM_LOG';
 var TRIGGER_HANDLER = 'checkPrices';
 var MAX_LOG_ENTRIES = 50;
 var MAX_HISTORY_POINTS = 500;
+var REARM_FACTOR = 0.5; // deadband:streak re-arms below threshold× this
 
 /* ------------------------------ Web app entry ------------------------------ */
 
@@ -73,13 +74,15 @@ function validateItem_(item) {
     windowMin: Number(item.windowMin),
     upPct: Number(item.upPct),
     downPct: Number(item.downPct),
-    maxAlerts: Number(item.maxAlerts) || 3
+    maxAlerts: Number(item.maxAlerts) || 3,
+    stepPct: Number(item.stepPct) || 0.5
   };
   if (!(it.intervalMin >= 1)) throw new Error('Check interval must be at least 1 minute.');
   if (!(it.windowMin >= 1)) throw new Error('Monitoring window must be at least 1 minute.');
   if (!(it.upPct > 0)) throw new Error('Up threshold must be greater than 0.');
   if (!(it.downPct > 0)) throw new Error('Down threshold must be greater than 0.');
   if (!(it.maxAlerts >= 1)) throw new Error('Max consecutive alerts must be at least 1.');
+  if (!(it.stepPct >= 0)) throw new Error('Re-alert step must be 0 or greater.');
   if (!it.email) it.email = Session.getEffectiveUser().getEmail() || '';
   if (!it.email) throw new Error('Please provide an alert email address.');
   return it;
@@ -290,17 +293,52 @@ function checkSymbol_(item, state, now) {
   });
 
 
-  // Alerts: at most maxAlerts consecutive per direction; in-threshold checks reset the streak.
+  // Alerts: escalation-step + deadband re-arm + maxAlerts cap. Same-direction trends only
+  // re-email when the delta advances past the last emailed level + stepPct (wiggle withint he step
+  // stays silent)。 Direction flip or genuine retreat (below threshold× REARM_FACTOR) re-arms the streak.
   var prev = state.latest[sym] || {};
 var direction = risePct >= item.upPct ? 'UP' : (dropPct >= item.downPct ? 'DOWN' : null);
-var sameDelta = (prev.lastDelta != null && prev.lastDelta === roundedDelta);
+var absDelta = Math.abs(deltaThisCheck);
 var cnt = state.alertCount[sym] || 0;
-if (direction) {
-  cnt = (prev.lastAlert && prev.lastAlert.direction === direction && sameDelta) ? Math.min(cnt + 1, item.maxAlerts + 1) : 1;
-} else {
-  cnt =  0;
-}
-state.alertCount[sym] = cnt;
+var prevDir = prev.lastAlert && prev.lastAlert.direction;
+var outOf = (direction || prevDir) === 'UP' ? item.upPct : item.downPct;
+var prevAlertedAbs = (prev.lastAlertedDelta != null) ? Math.abs(prev.lastAlertedDelta) : null;
+  var notify = false;
+  var suppressed = false;
+  if (direction) {
+    var prevSame = prevDir === direction;
+    var fresh = !prevSame || cnt === 0;
+    if (fresh) {
+      // Fresh streak(new direction or post-re-arm):email immediately.
+      cnt = 1;
+      notify = true;
+    } else if (cnt > item.maxAlerts) {
+      // Silent cooldown:only re-email when delta advances past the last emailed
+      // level + stepPct — that re-arms a fresh cycle. Otherwise stay silent.
+      if (prevAlertedAbs != null && absDelta >= prevAlertedAbs + item.stepPct) {
+        cnt = 1;
+        notify = true;
+      } else {
+        suppressed = true;
+      }
+    } else if (prevAlertedAbs == null ||
+        absDelta >= prevAlertedAbs + item.stepPct) {
+      // Escalation:delta advanced by stepPct beyond the last emailed level → re-email.
+      cnt = Math.min(cnt + 1, item.maxAlerts + 1);
+      notify = true;
+    } else {
+      // Same direction but no meaningful advance → keep streak, silent.
+      suppressed = true;
+    }
+    if (cnt > item.maxAlerts) suppressed = true;
+  } else {
+    // In threshold:deadband re-arm when genuinely retreating;hold streak across minor bounces.
+    if (prevDir && prevAlertedAbs != null) {
+      if (absDelta < outOf * REARM_FACTOR) cnt =  0;
+    } else {
+      cnt =  0;
+    }
+  }
 state.alertCount[sym] = cnt;
 state.latest[sym] = {
   price: price,
@@ -319,13 +357,14 @@ state.latest[sym] = {
   alertCount: cnt,
   lastAlert: direction ? { direction: direction, at: new Date(now).toISOString() } : (prev.lastAlert || null),
   lastDelta: roundedDelta,
+  lastAlertedDelta: (notify) ? deltaThisCheck : (prev.lastAlertedDelta != null ? prev.lastAlertedDelta : null),
 };
 if (direction) {
-  if (cnt <= item.maxAlerts) {
+  if (notify && cnt <= item.maxAlerts) {
     sendAlert_(item, quote, deltaThisCheck, direction, now, cnt, direction === 'UP' ? windowMinP : windowMaxP, peak ? peak.t : now);
     addLog_('alert', sym + ' ' + direction + ' ' + formatPct_(deltaThisCheck) +
       ' (' + price + ' ' + quote.currency + ') — alert emailed to ' + item.email);
-  } else {
+  } else if (suppressed) {
     addLog_('error', 'Suppressed repeated ' + direction + ' alert for ' + sym +
       ' (would be #' + cnt + ' of ' + item.maxAlerts + ' — price still ' +
       formatPct_(deltaThisCheck) + ' out of threshold)');
@@ -430,8 +469,9 @@ function sendAlert_(item, quote, deltaPct, direction, now, cnt, refPrice, refTim
   });
   html += '</table>';
   html += '<p style="margin:12px 0 0;font-size:12px;color:#6b7280;font-family:Arial,Helvetica,sans-serif;">' +
-    'No further identical alert will be sent for this move (max ' + item.maxAlerts +
-    ' consecutive per direction). The streak resets when the delta value changes or the direction flips.</p>';
+    'Re-alerts pause after ' + item.maxAlerts + ' consecutive per direction, and resume only when the move',
+    ' extends by ' + item.stepPct + '% beyond the last alerted level(escalation)。 The streak resets when the',
+    ' direction flips or the price retreats below half the threshold.</p>';
   MailApp.sendEmail(item.email, subject, html, { htmlBody: html });
 }
 /* ------------------------------- State / log ------------------------------- */
@@ -498,4 +538,6 @@ function pad2_(n) { return (n < 10 ? '0' : '') + n; }
 function round4_(v) {
   return Math.round(v * 10000) / 10000;
 }
+
+
 
