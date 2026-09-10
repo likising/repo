@@ -267,15 +267,17 @@ function checkSymbol_(item, state, now) {
   var inWindow = hist.filter(function (pt) { return pt.t >= windowStart; });
 
 
-  var windowMinP = null, windowMaxP = null;
+  var windowMinP = null, windowMinT = null;
+  var windowMaxP = null, windowMaxT = null;
   inWindow.forEach(function (pt) {
-    if (windowMinP == null || pt.p < windowMinP) windowMinP = pt.p;
-    if (windowMaxP == null || pt.p > windowMaxP) windowMaxP = pt.p;
+    if (windowMinP == null || pt.p < windowMinP) { windowMinP = pt.p; windowMinT = pt.t; }
+    if (windowMaxP == null || pt.p > windowMaxP) { windowMaxP = pt.p; windowMaxT = pt.t; }
   });
   var risePct = windowMinP != null && windowMinP >  0 ? (price - windowMinP) / windowMinP *  100 :  0;
   var dropPct = windowMaxP != null && windowMaxP >  0 ? (windowMaxP - price) / windowMaxP *  100 :  0;
   risePct = Math.max(0, risePct); dropPct = Math.max(0, dropPct);
-  var deltaThisCheck = Math.abs(risePct) >= Math.abs(dropPct) ? risePct : -dropPct;
+  var direction = risePct >= item.upPct ? 'UP' : (dropPct >= item.downPct ? 'DOWN' : null);
+  var deltaThisCheck = direction === 'UP' ? risePct : (direction === 'DOWN' ? -dropPct : 0);
   var roundedDelta = Math.round(deltaThisCheck * 10000) / 10000;
 
   // Store the per-check delta with the price, so the displayed peak can be computed later和
@@ -297,7 +299,6 @@ function checkSymbol_(item, state, now) {
   // re-email when the delta advances past the last emailed level + stepPct (wiggle withint he step
   // stays silent)。 Direction flip or genuine retreat (below threshold× REARM_FACTOR) re-arms the streak.
   var prev = state.latest[sym] || {};
-var direction = risePct >= item.upPct ? 'UP' : (dropPct >= item.downPct ? 'DOWN' : null);
 var absDelta = Math.abs(deltaThisCheck);
 var cnt = state.alertCount[sym] || 0;
 var prevDir = prev.lastAlert && prev.lastAlert.direction;
@@ -347,10 +348,11 @@ state.latest[sym] = {
   name: quote.name,
   exchange: quote.exchange,
   marketState: quote.marketState,
-  sessionKind: quote.sessionKind || 'REGULAR',
   tradeAt: quote.tradeAt,
   windowMin: windowMinP,
+  windowMinAt: windowMinT ? new Date(windowMinT).toISOString() : null,
   windowMax: windowMaxP,
+  windowMaxAt: windowMaxT ? new Date(windowMaxT).toISOString() : null,
   deltaPct: peak ? peak.d : 0,
   refAt: peak ? new Date(peak.t).toISOString() : new Date(now).toISOString(),
   at: new Date(now).toISOString(),
@@ -361,7 +363,7 @@ state.latest[sym] = {
 };
 if (direction) {
   if (notify && cnt <= item.maxAlerts) {
-    sendAlert_(item, quote, deltaThisCheck, direction, now, cnt, direction === 'UP' ? windowMinP : windowMaxP, peak ? peak.t : now);
+    sendAlert_(item, quote, deltaThisCheck, direction, now, cnt, direction === 'UP' ? windowMinP : windowMaxP, direction === 'UP' ? (windowMinT || now) : (windowMaxT || now));
     addLog_('alert', sym + ' ' + direction + ' ' + formatPct_(deltaThisCheck) +
       ' (' + price + ' ' + quote.currency + ') — alert emailed to ' + item.email);
   } else if (suppressed) {
@@ -401,23 +403,14 @@ function fetchQuote_(symbol) {
         continue;
       }
       var meta = result.meta || {};
-      var closes = result.indicators && result.indicators.quote &&
-        result.indicators.quote[0] && result.indicators.quote[0].close;
-      var lastCandle = null;
-      if (closes) {
-        for (var j = closes.length - 1; j >= 0; j--) {
-          if (closes[j] != null) { lastCandle = closes[j]; break; }
-        }
-      }
-      var marketState = meta.marketState;
       var price = meta.regularMarketPrice;
-      var tradeAt = meta.regularMarketTime ? new Date(meta.regularMarketTime * 1000) : null;
-      if (marketState === 'PRE' || marketState === 'POST') {
-        if (meta.fulldayPrice != null) {
-          price = meta.fulldayPrice;
-          tradeAt = null;
-        } else if (lastCandle != null) {
-          price = lastCandle;
+      if (price == null) {
+        var closes = result.indicators && result.indicators.quote &&
+          result.indicators.quote[0] && result.indicators.quote[0].close;
+        if (closes) {
+          for (var j = closes.length - 1; j >= 0; j--) {
+            if (closes[j] != null) { price = closes[j]; break; }
+          }
         }
       }
       if (price == null) throw new Error('No price in response');
@@ -426,10 +419,9 @@ function fetchQuote_(symbol) {
         name: meta.shortName || meta.longName || meta.symbol || symbol,
         price: price,
         currency: meta.currency || '',
-        marketState: marketState,
+        marketState: meta.marketState || '',
         exchange: meta.fullExchangeName || meta.exchangeName || '',
-        tradeAt: tradeAt ? tradeAt.toISOString() : null,
-        sessionKind: (marketState === 'PRE' || marketState === 'POST') ? marketState : 'REGULAR',
+        tradeAt: meta.regularMarketTime ? new Date(meta.regularMarketTime * 1000).toISOString() : null
       };
     } catch (e) {
       lastErr = e;
@@ -453,7 +445,7 @@ function sendAlert_(item, quote, deltaPct, direction, now, cnt, refPrice, refTim
     ['Window delta', '<b style="color:' + color + ';">' + pct + '</b> (' + item.windowMin + ' min window)'],
     ['Current price', escHtml_(formatPrice_(quote.price) + ' ' + quote.currency + ' @ ' + formatHKT_(quote.tradeAt))],
     ['Reference price', escHtml_(refP + ' @ ' + refT)],
-    ['Market state', escHtml_(quote.marketState || (quote.sessionKind === 'PRE' ? 'Pre-market' : quote.sessionKind === 'POST' ? 'Post-market' : '—'))],
+    ['Market state', escHtml_(quote.marketState || '—')],
     ['Check interval', item.intervalMin + ' min'],
     ['Thresholds', 'Up +' + Number(item.upPct).toFixed(2) + '% / Down −' + Number(item.downPct).toFixed(2) + '%'],
     ['Consecutive alert', cnt + ' / ' + item.maxAlerts + ' max'],
@@ -538,6 +530,3 @@ function pad2_(n) { return (n < 10 ? '0' : '') + n; }
 function round4_(v) {
   return Math.round(v * 10000) / 10000;
 }
-
-
-
