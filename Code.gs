@@ -456,7 +456,7 @@ function sendAlert_(item, quote, deltaPct, direction, now, cnt, refPrice, refTim
   var heading = '<p style="margin:0 0 14px;font-size:15px;font-weight:bold;color:#0e7490;">' +
     arrow + ' ' + escHtml_(quote.symbol + ' (' + quote.name + ')') + ' - Alert summary</p>';
   var html = heading +
-    '<table style="border-collapse:collapse;width:100%;max-width:640px;margin:0 auto;font-size:13px;color:#111827;font-family:Arial,Helvetica,sans-serif;">';
+    '<table style="border-collapse:collapse;width:100%;max-width:640px;font-size:13px;color:#111827;font-family:Arial,Helvetica,sans-serif;">';
   rows.forEach(function (r) {
     html += '<tr><td style="padding:6px 10px;background:#f8fafc;border:1px solid #e2e8f0;font-weight:bold;width:32%;">' +
       r[0] + '</td><td style="padding:6px 10px;border:1px solid #e2e8f0;">' + r[1] + '</td></tr>';
