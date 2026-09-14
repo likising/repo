@@ -280,15 +280,18 @@ function checkSymbol_(item, state, now) {
   var deltaThisCheck = direction === 'UP' ? risePct : (direction === 'DOWN' ? -dropPct : 0);
   var roundedDelta = Math.round(deltaThisCheck * 10000) / 10000;
 
-  // Store the per-check delta with the price, so the displayed peak can be computed later和
-  hist.push({ t: now, p: price, d: deltaThisCheck });
+  // Stored delta = largest |move| vs window extremes, signed by the bigger move,
+  // regardless of thresholds — so the card's peak shows real in-window moves even
+  // while the current price sits inside the thresholds.
+  var histDelta = Math.abs(risePct) >= Math.abs(dropPct) ? risePct : -dropPct;
+  hist.push({ t: now, p: price, d: histDelta });
   if (hist.length > MAX_HISTORY_POINTS) hist = hist.slice(-MAX_HISTORY_POINTS);
   state.history[sym] = hist;
 
 
   // Displayed delta =the in-window history point with the largest |delta|,(ties → newest)。
   var peak = null;
-  inWindow.concat({ t: now, d: deltaThisCheck }).forEach(function (pt) {
+  inWindow.concat({ t: now, d: histDelta }).forEach(function (pt) {
     if (pt.d == null) return;
     if (!peak || Math.abs(pt.d) > Math.abs(peak.d) ||
         (Math.abs(pt.d) == Math.abs(peak.d) && pt.t > peak.t)) peak = pt;
