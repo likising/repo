@@ -270,7 +270,7 @@
     function fmtShort(iso) {
       if (!iso) return '';
       var d = new Date(iso);
-      return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+      return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
     }
 
     /* ------------------------------- actions ------------------------------- */
@@ -389,14 +389,14 @@
       var maxAl = item.maxAlerts || 3;
       var cnt = q && !bad ? (q.alertCount || 0) : 0;
       var chips = bad
-        ? '<span class="badtxt">' + item.intervalMin + 'min · +' + item.upPct + '%/-' + item.downPct + '%</span>'
+        ? '<span class="badtxt">' + item.intervalMin + '/' + item.windowMin + 'min · +' + item.upPct + '%/-' + item.downPct + '% · step ' + item.stepPct + '%</span>'
         : (activeAlert
           ? '<span class="alerttxt ' + (q.lastAlert.direction === 'UP' ? 'up' : 'down') + '">Alert: ' + q.lastAlert.direction.toLowerCase() +
             (cnt <= maxAl
                 ? ' · ' + cnt + '/' + maxAl
                 : ' · suppressed') + '</span>' +
-            '<span class="win">' + item.intervalMin + 'min · +' + item.upPct + '%/-' + item.downPct + '% · step +' + item.stepPct + '%</span>'
-          : '<span class="win">Window ' + item.windowMin + 'min · Every ' + item.intervalMin + 'min · +' + item.upPct + '%/-' + item.downPct + '% · step +' + item.stepPct + '%</span>');
+            '<span class="win">' + item.intervalMin + 'min · +' + item.upPct + '%/-' + item.downPct + '% · step ' + item.stepPct + '%</span>'
+          : '<span class="win">' + item.intervalMin + '/' + item.windowMin + 'min · +' + item.upPct + '%/-' + item.downPct + '% · step ' + item.stepPct + '%</span>');
       var s = esc(item.symbol);
       return '<div class="card' + (hk ? ' hk' : '') + '" data-sym="' + s + '">' +
         '<div class="top"><span class="grip" title="Drag to reorder">⠿</span>' +
