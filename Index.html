@@ -395,7 +395,7 @@
             (cnt <= maxAl
                 ? ' · ' + cnt + '/' + maxAl
                 : ' · suppressed') + '</span>' +
-            '<span class="win">' + item.intervalMin + 'min · +' + item.upPct + '%/-' + item.downPct + '% · step ' + item.stepPct + '%</span>'
+            '<span class="win">' + item.intervalMin + '/' + item.windowMin + 'min · +' + item.upPct + '%/-' + item.downPct + '% · step ' + item.stepPct + '%</span>'
           : '<span class="win">' + item.intervalMin + '/' + item.windowMin + 'min · +' + item.upPct + '%/-' + item.downPct + '% · step ' + item.stepPct + '%</span>');
       var s = esc(item.symbol);
       return '<div class="card' + (hk ? ' hk' : '') + '" data-sym="' + s + '">' +
