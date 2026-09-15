@@ -523,7 +523,8 @@ function formatHKT_(isoOrMs) {
   if (isoOrMs == null) return '—';
   var d = isoOrMs instanceof Date ? isoOrMs : new Date(isoOrMs);
   if (isNaN(d.getTime())) return '—';
-  var hk = new Date(d.getTime() + 8 * 3600 * 1000); // shift to HKT (UTC+8)
+  // Convert to Hong Kong Time (UTC+8)
+  var hk = new Date(d.getTime() + 8 * 3600 * 1000);
   return pad2_(hk.getUTCDate()) + '/' + pad2_(hk.getUTCMonth() + 1) + '/' + hk.getUTCFullYear() +
     ' ' + pad2_(hk.getUTCHours()) + ':' + pad2_(hk.getUTCMinutes()) + ' HKT';
 }
