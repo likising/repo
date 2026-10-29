@@ -174,6 +174,11 @@
         <input id="fEmail" type="email" placeholder="you@example.com">
         <div class="hint">Defaults to your Google account email if left blank.</div>
       </div>
+      <div class="field" style="display:flex;align-items:center;gap:8px;">
+        <input id="fEmailEnabled" type="checkbox" style="width:auto">
+        <label for="fEmailEnabled" style="margin:0;cursor:pointer">Enable email alerts for this stock</label>
+        <div class="hint" style="margin:0">Uncheck to monitor without sending emails.</div>
+      </div>
       <div class="grid2">
         <div class="field"><label>Check interval (min)</label><input id="fInterval" type="number" min="1" step="1" value="1"></div>
         <div class="field"><label>Window (min)</label><input id="fWindow" type="number" min="1" step="1" value="30"></div>
@@ -310,7 +315,8 @@
         symbol: g('fSymbol'), email: g('fEmail'),
         intervalMin: g('fInterval'), windowMin: g('fWindow'),
         upPct: g('fUp'), downPct: g('fDown'),
-        maxAlerts: g('fMaxAlerts'), stepPct: g('fStep')
+        maxAlerts: g('fMaxAlerts'), stepPct: g('fStep'),
+        emailEnabled: document.getElementById('fEmailEnabled').checked
       };
       call('upsertItem', [it], function (r) {
         STATUS = r.status; closeOverlays(); render(r.status); toast(r.toastText);
@@ -339,6 +345,7 @@
       document.getElementById('fSymbol').value = item ? item.symbol : '';
       document.getElementById('fSymbol').disabled = !!item;
       document.getElementById('fEmail').value = item ? item.email : defaultEmail();
+      document.getElementById('fEmailEnabled').checked = item ? item.emailEnabled !== false : true;
       document.getElementById('fInterval').value = item ? item.intervalMin : 1;
       document.getElementById('fWindow').value = item ? item.windowMin : 30;
       document.getElementById('fUp').value = item ? item.upPct : 1;
@@ -386,8 +393,10 @@
           ? '<span>Trade <b>' + fmtDT(q.tradeAt) + '</b></span><span>Checked <b>' + fmtDT(q.at) + '</b></span>'
           : '<span>Waiting for first quote…</span><span></span>');
       var activeAlert = q && !bad && (q.alertCount || 0) >= 1;
+      var emailOff = item.emailEnabled === false;
       var maxAl = item.maxAlerts || 3;
       var cnt = q && !bad ? (q.alertCount || 0) : 0;
+      var silentChip = emailOff ? '<span class="badtxt" style="color:var(--muted)">🔕 email off</span>' : '';
       var chips = bad
         ? '<span class="badtxt">' + item.intervalMin + '/' + item.windowMin + 'min · +' + item.upPct + '%/-' + item.downPct + '% · step ' + item.stepPct + '%</span>'
         : (activeAlert
@@ -403,7 +412,7 @@
         '<a class="hdr" href="' + url + '" target="_blank">' +
         '<span class="sym">' + s + '</span>' +
         '<span class="name">' + esc(q && q.name ? q.name : '') + '</span></a>' +
-        '<span class="dot' + (bad ? ' err' : (active ? '' : ' off')) + '"></span></div>' +
+        '<span class="dot' + (bad ? ' err' : (active && !emailOff ? '' : ' off')) + '"></span></div>' +
         '<div class="price-row">' + (q && q.currency && !bad ? '<span class="ccy">' + esc(q.currency) + '</span>' : '') +
         '<span class="price">' + (bad ? '—' : (q ? fmtPrice(q.price) : '—')) + '</span>' +
         '<span class="delta-wrap">' +
@@ -411,7 +420,7 @@
         (q && q.refAt && !bad ? '<span class="dt">' + fmtShort(q.refAt) + '</span>' : '') +
         '</span></div>' +
         '<div class="meta">' + meta + '</div><hr>' +
-        '<div class="foot"><span style="display:flex;gap:10px;flex-wrap:wrap">' + chips + '</span>' +
+        '<div class="foot"><span style="display:flex;gap:10px;flex-wrap:wrap">' + silentChip + chips + '</span>' +
         '<span class="icons">' +
         '<button class="icon" title="Check now" onclick="onCheckOne(\'' + s + '\')">↻</button>' +
         '<button class="icon" title="Edit settings" onclick="openAdd(\'' + s + '\')">✎</button>' +

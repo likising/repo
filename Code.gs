@@ -75,7 +75,8 @@ function validateItem_(item) {
     upPct: Number(item.upPct),
     downPct: Number(item.downPct),
     maxAlerts: Number(item.maxAlerts) || 3,
-    stepPct: Number(item.stepPct) || 0.5
+    stepPct: Number(item.stepPct) || 0.5,
+    emailEnabled: item.emailEnabled !== false
   };
   if (!(it.intervalMin >= 1)) throw new Error('Check interval must be at least 1 minute.');
   if (!(it.windowMin >= 1)) throw new Error('Monitoring window must be at least 1 minute.');
@@ -366,9 +367,14 @@ state.latest[sym] = {
 };
 if (direction) {
   if (notify && cnt <= item.maxAlerts) {
-    sendAlert_(item, quote, deltaThisCheck, direction, now, cnt, direction === 'UP' ? windowMinP : windowMaxP, direction === 'UP' ? (windowMinT || now) : (windowMaxT || now));
-    addLog_('alert', sym + ' ' + direction + ' ' + formatPct_(deltaThisCheck) +
-      ' (' + price + ' ' + quote.currency + ') — alert emailed to ' + item.email);
+    if (item.emailEnabled !== false) {
+      sendAlert_(item, quote, deltaThisCheck, direction, now, cnt, direction === 'UP' ? windowMinP : windowMaxP, direction === 'UP' ? (windowMinT || now) : (windowMaxT || now));
+      addLog_('alert', sym + ' ' + direction + ' ' + formatPct_(deltaThisCheck) +
+        ' (' + price + ' ' + quote.currency + ') — alert emailed to ' + item.email);
+    } else {
+      addLog_('alert', sym + ' ' + direction + ' ' + formatPct_(deltaThisCheck) +
+        ' (' + price + ' ' + quote.currency + ') — alert NOT emailed (email disabled for ' + sym + ')');
+    }
   } else if (suppressed) {
     addLog_('error', 'Suppressed repeated ' + direction + ' alert for ' + sym +
       ' (would be #' + cnt + ' of ' + item.maxAlerts + ' — price still ' +
